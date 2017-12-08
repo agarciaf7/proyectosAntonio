@@ -21,6 +21,8 @@ import RPi.GPIO as GPIO
 IMAGE_PORTIONS = 6 # Porciones horizontales en las que dividimos la deteccion en la imagen
 MAX_ROTATION_ANGLE = 180 # Maximo angulo de rotacion que girara el soporte
 
+previousAngle = 0 # Guardamos el angulo anterior
+
 # Funcion para calcular el angulo al que hay que poner el soporte en funcion de la
 # posicion horizontal del rostro en la imagen
 def getAngle(image_width, image_portions, max_rotation_angle, horizontal_position):
@@ -38,13 +40,17 @@ def getAngle(image_width, image_portions, max_rotation_angle, horizontal_positio
         return result
 
 # Funcion para mover el servo en funcion del angulo que se le pase
-def moveServo(angle):
-        duty = angle / 18 + 2
-        GPIO.output(03, True)
-        pwm.ChangeDutyCycle(duty)
-        time.sleep(1.0)
-        GPIO.output(03, False)
-        pwm.ChangeDutyCycle(0)
+def moveServo(angle, previousAngle):
+        print ("previousAngle=", previousAngle)
+        print ("moveServo angle=", angle)
+        # Solo movemos el servo si ha cambiado el angulo pues de lo contrario vibra
+        if angle != previousAngle :
+            duty = angle / 18 + 2
+            GPIO.output(03, True)
+            pwm.ChangeDutyCycle(duty)
+            time.sleep(0.5)
+            GPIO.output(03, False)
+            pwm.ChangeDutyCycle(0)
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
@@ -78,7 +84,7 @@ while True:
         #image = imutils.resize(image, width=600)
 
         # Le damos la vuelta (efecto espejo)
-        #image=cv2.flip(image,1)
+        image=cv2.flip(image,1)
         
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -104,10 +110,11 @@ while True:
             #cv2.circle(image, (x+(w/2), y+(h/2)), 15, (0, 255, 0), thickness=1, lineType=8, shift=0)
             if len(faces) == 1 :
                 # Movemos el serv unicamente si hay una sola cara
-                print("Mover servo")
+                #print("Mover servo")
                 angle = getAngle(image_width, IMAGE_PORTIONS, MAX_ROTATION_ANGLE, (x+(w/2)))
-                print angle
-                moveServo(angle)
+                #print angle
+                moveServo(angle, previousAngle)
+                previousAngle = angle
 
         # show the image to our screen
         cv2.imshow("image", image)
