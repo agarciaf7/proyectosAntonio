@@ -19,9 +19,10 @@ import time
 import RPi.GPIO as GPIO
 
 IMAGE_PORTIONS = 6 # Porciones horizontales en las que dividimos la deteccion en la imagen
-MAX_ROTATION_ANGLE = 180 # Maximo angulo de rotacion que girara el soporte
+MAX_ROTATION_ANGLE = 80 # Maximo angulo de rotacion que girara el soporte. Hay que desconar el angulo margen de derecha e izquierda 
+MARGIN_ANGLE = 50 # Tamano del angulo que no cubriremos a derecha e izquierda
 
-previousAngle = 0 # Guardamos el angulo anterior
+previousAngle = 90 # Guardamos el angulo anterior
 
 # Funcion para calcular el angulo al que hay que poner el soporte en funcion de la
 # posicion horizontal del rostro en la imagen
@@ -33,9 +34,9 @@ def getAngle(image_width, image_portions, max_rotation_angle, horizontal_positio
         portion_angle = (max_rotation_angle / image_portions)
 
         if horizontal_position <= (image_width / 2) :
-                result = (portion + 1) * portion_angle
+                result = ((portion + 1) * portion_angle) + MARGIN_ANGLE
         else :
-                result = portion * portion_angle
+                result = (portion * portion_angle) + MARGIN_ANGLE
 
         return result
 
@@ -43,7 +44,6 @@ def getAngle(image_width, image_portions, max_rotation_angle, horizontal_positio
 def moveServo(angle, previousAngle):
         print ("previousAngle=", previousAngle)
         print ("moveServo angle=", angle)
-        # Solo movemos el servo si ha cambiado el angulo pues de lo contrario vibra
         if angle != previousAngle :
             duty = angle / 18 + 2
             GPIO.output(03, True)
@@ -73,6 +73,7 @@ GPIO.setmode(GPIO.BOARD)
 GPIO.setup(03, GPIO.OUT)
 pwm=GPIO.PWM(03, 50) # setup PWM on pin #3 at 50Hz
 pwm.start(0)
+moveServo(90, 0)
 
 # keep looping
 while True:
