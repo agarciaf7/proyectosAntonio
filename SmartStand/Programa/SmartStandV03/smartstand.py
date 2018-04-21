@@ -38,7 +38,7 @@ def getAngle(image_width, image_portions, max_rotation_angle, horizontal_positio
         portion = int(horizontal_position / portion_width)
         # grados de cada porcion del servo
         portion_angle = (max_rotation_angle / image_portions)
-        # El resultado es el angulo correspondiente al centro de la porci�n del servo con la que se corresponde en funcion de la porcion en la imagen
+        # El resultado es el angulo correspondiente al centro de la porciÃ³n del servo con la que se corresponde en funcion de la porcion en la imagen
         result = (portion_angle * portion) + (portion_angle / 2)
 
         return result
@@ -76,6 +76,8 @@ ap.add_argument("-p", "--picamera", type=int, default=-1,
         help="whether or not the Raspberry Pi camera should be used")
 ap.add_argument("-a", "--min-area", type=int, default=500,
         help="minimum area size")
+ap.add_argument("-m", "--max-area", type=int, default=95000,
+        help="maximum area size")
 args = vars(ap.parse_args())
 
 ##cascPath = "./cascades/haarcascade_frontalface_alt.xml"
@@ -112,7 +114,7 @@ while True:
         image = imutils.resize(image, width=600)
 
         # Le damos la vuelta (efecto espejo)
-##        image=cv2.flip(image,1)
+        image=cv2.flip(image,1)
 ##
         # convert the frame to grayscale, and blur it
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -134,20 +136,36 @@ while True:
 ##	(cnts, _) = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 	(_, cnts, _) = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
+        biggestContour = None #Guardaremos el mayor contorno
 	# loop over the contours
 	for c in cnts:
 		# if the contour is too small, ignore it
-		if cv2.contourArea(c) < args["min_area"]:
+		if cv2.contourArea(c) < args["min_area"] or cv2.contourArea(c) > args["max_area"]:
 			continue
 
-		# Si llegamos aqu� es que se ha detectado algun contorno con movimiento
+		# Si llegamos aquÃ­ es que se ha detectado algun contorno con movimiento
 		# compute the bounding box for the contour, draw it on the frame,
 		# and update the text
 		(x, y, w, h) = cv2.boundingRect(c)
 		cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-		print("Contornos con movimiento: {0}".format(len(cnts)))
+		# print("Contornos con movimiento: {0}".format(len(cnts)))
+		if biggestContour is None or cv2.contourArea(c) > cv2.contourArea(biggestContour):
+                        # si el nuevo contorno es mayor que el guardado lo sustituimos
+                        biggestContour = c
 
-
+        if biggestContour is not None:
+            # Dibuja un circulo en el centro del mayor contorno
+            (x, y, w, h) = cv2.boundingRect(biggestContour)
+            cv2.circle(image, (x+(w/2), y+(h/2)), 15, (0, 255, 0), thickness=1, lineType=8, shift=0)
+            print("Mayor area: {0}".format(cv2.contourArea(biggestContour)))
+            print("Mover servo")
+            # Tamano de la imagen
+            image_height, image_width = image.shape[:2]
+            #angle = getAngle(image_width, IMAGE_PORTIONS, MAX_ROTATION_ANGLE, (x+(w/2)))
+            angle = getAngleSinPorciones(image_width, MAX_ROTATION_ANGLE, (x+(w/2)))
+            #print angle
+            moveServo(angle, previousAngle)
+            previousAngle = angle
 
 
 
