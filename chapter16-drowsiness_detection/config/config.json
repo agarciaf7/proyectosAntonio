@@ -1,0 +1,27 @@
+{
+	// path to OpenCV's face detector haar cascade file
+	"cascade_path": "haarcascade_frontalface_default.xml",
+
+	// path to dlib's facial landmark predictor
+	"shape_predictor_path": "shape_predictor_68_face_landmarks.dat",
+
+	// two boolean variables, one used to indicate if frames must be
+	// displayed, and second used to indicate if TrafficHat should be
+	// used
+	"display": true,
+	"alarm": false,
+
+	// two constants, one for the eye aspect ratio to indicate
+	// blink and then a second constant for the number of consecutive
+	// frames the eye must be below the threshold for to set off the
+	// alarm
+	"EYE_AR_THRESH": 0.3,
+	"EYE_AR_CONSEC_FRAMES": 8,
+
+	// three constants, one for the mouth aspect ratio to indicate
+	// yawn, a second constant for the yawn threshold, and a third
+	// constant for the yawn threshold time
+	"MOUTH_AR_THRESH": 0.65,
+	"YAWN_THRESH_COUNT": 3,
+	"YAWN_THRESH_TIME": 600
+}
