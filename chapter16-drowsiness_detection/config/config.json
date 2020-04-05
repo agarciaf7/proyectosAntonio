@@ -9,7 +9,7 @@
 	// displayed, and second used to indicate if TrafficHat should be
 	// used
 	"display": true,
-	"alarm": false,
+	"alarm": true,
 
 	// two constants, one for the eye aspect ratio to indicate
 	// blink and then a second constant for the number of consecutive
@@ -23,5 +23,10 @@
 	// constant for the yawn threshold time
 	"MOUTH_AR_THRESH": 0.65,
 	"YAWN_THRESH_COUNT": 3,
-	"YAWN_THRESH_TIME": 600
+	"YAWN_THRESH_TIME": 600,
+
+	// dos constantes, una para el umbral de giro de nariz y otra
+	// para el numero de frames con la nariz desviada
+	"NOSE_AR_THRESH": 6,
+	"NOSE_AR_CONSEC_FRAMES": 5
 }

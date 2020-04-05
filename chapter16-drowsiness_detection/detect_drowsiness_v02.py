@@ -31,7 +31,7 @@ def eye_aspect_ratio(eye):
     # compute the eye aspect ratio
     ear = (a + b) / (2.0 * c)
 
-    print('eye=' + str(eye) +' eye[0]=' + str(eye[0]) + ' eye[3]=' + str(eye[3]))
+#    print('eye=' + str(eye) +' eye[0]=' + str(eye[0]) + ' eye[3]=' + str(eye[3]))
     
 #    cv2.circle(frame, (eye[0][0], eye[0][1]), 10, (255, 0, 0), 2) #prueba
 
@@ -67,14 +67,17 @@ def nose_desviation(leftEye, rightEye, nose):
     centro_entre_ojos = x_extremo_rightEye + ((x_extremo_leftEye - x_extremo_rightEye) / 2)
     
     desviation = x_centro_nose - centro_entre_ojos # Negativo es que está girado a la izqda
-    print('centro_entre_ojos='+str(centro_entre_ojos) + ' desviation=' + str(desviation))
+#    print('centro_entre_ojos='+str(centro_entre_ojos) + ' desviation=' + str(desviation))
 
     return desviation
 
-def check_closed_eyes():
+def check_closed_eyes(shape, lStart, lEnd, rStart, rEnd, cv2, frame):
 
-    global leftEye, rightEye, ear, blinkCounter, shape, lStart, lEnd, cv2, frame, alarmOn, th   
-
+    global blinkCounter, alarmOn, th
+    
+    # extract the left and right eye coordinates
+    leftEye = shape[lStart:lEnd]
+    rightEye = shape[rStart:rEnd]
     # we use eyes
     # coordinates to compute the eye aspect ratio for both eyes
     leftEAR = eye_aspect_ratio(leftEye)
@@ -104,9 +107,9 @@ def check_closed_eyes():
                 # check to see if the TrafficHat buzzer should
                 # be sounded and red light set to blink
                 if conf["alarm"]:
-                    th.buzzer.blink(0.1, 0.1, 30,
+                    th.buzzer.blink(0.1, 0.1, 5,
                         background=True)
-                    th.lights.red.blink(0.1, 0.1, 30,
+                    th.lights.red.blink(0.1, 0.1, 10,
                         background=True)
 
             # draw an alarm on the frame
@@ -117,12 +120,13 @@ def check_closed_eyes():
     # threshold, so reset the counter and alarm
     else:
         blinkCounter = 0
-        alarmOn = False    
+        alarmOn = False
+        
+    return
     
-def check_yawn():
+def check_yawn(shape, mStart, mEnd, cv2, frame):
 
-    global mar, shape, mStart, mEnd, cv2, frame, alarmOn, th, startTime, yawnCounter
-    
+    global yawnCounter, alarmOn, th, startTime    
     # extract the inner mouth coordinates, then use the
     # coordinates to compute the mouth aspect ratio for the mouth
     mouth = shape[mStart:mEnd]
@@ -155,9 +159,9 @@ def check_yawn():
                 # check to see if the TrafficHat buzzer should
                 # be sounded and red light set to blink
                 if conf["alarm"]:
-                    th.buzzer.blink(0.1, 0.1, 10,
+                    th.buzzer.blink(0.1, 0.1, 5,
                         background=True)
-                    th.lights.red.blink(0.1, 0.1, 30,
+                    th.lights.yellow.blink(0.1, 0.1, 10,
                         background=True)
 
             # draw an alarm on the frame
@@ -174,18 +178,63 @@ def check_yawn():
             # reset yawn counter, alarm flag and start time
             yawnCounter = 0
             alarmOn = False
-            startTime = None            
+            startTime = None
+    return
 
-def check_head_turn():
+def check_head_turn(shape, mStart, mEnd, lStart, lEnd, rStart, rEnd, cv2, frame):
 
-    global mar, shape, mStart, mEnd, cv2, frame, alarmOn, th, startTime, yawnCounter
+    global alarmOn, th, noseDesviationCounter
     # dibujamos la nariz
     nose = shape[nStart:nEnd]
+    leftEye = shape[lStart:lEnd]
+    rightEye = shape[rStart:rEnd]
     noseHull = cv2.convexHull(nose)
     cv2.drawContours(frame, [noseHull], -1, (0, 0, 255), 1)
 
-    nose_desviation(leftEye, rightEye, nose)
+    noseDesviation = nose_desviation(leftEye, rightEye, nose)
+    
+    if abs(noseDesviation) > conf["NOSE_AR_THRESH"]:
+        # increment the nose frame counter
+        noseDesviationCounter += 1
 
+        # if the nose was turned for a sufficient number of
+        # frames, then sound the alarm
+        if noseDesviationCounter >= conf["NOSE_AR_CONSEC_FRAMES"]:
+            # if the alarm is not on, turn it on
+            if not alarmOn:
+                alarmOn = True
+
+                # check to see if the TrafficHat buzzer should
+                # be sounded and red light set to blink
+                if conf["alarm"]:
+                    th.buzzer.blink(0.1, 0.1, 5,
+                        background=True)
+                    th.lights.green.blink(0.1, 0.1, 10,
+                        background=True)
+
+            # draw an alarm on the frame
+            cv2.putText(frame, "ALERTA! - cabeza girada", (10, 60),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+    # otherwise, the eye aspect ratio is not below the blink
+    # threshold, so reset the counter and alarm
+    else:
+        noseDesviationCounter = 0
+        alarmOn = False    
+    
+    return
+
+def draw_jaw(shape, jStart, jEnd, cv2, frame):
+    # extract the jaw (mandibula) coordinates
+    jaw = shape[jStart:jEnd]
+
+    # compute the convex hull for the left and right eye, then
+    # visualize each of the eyes
+    jawHull = cv2.convexHull(jaw)
+    cv2.drawContours(frame, [jawHull], -1, (0, 255, 0), 1)
+
+
+# ****************************************************************
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-c", "--conf", required=True,
@@ -205,12 +254,14 @@ if conf["alarm"]:
 centerX = None
 centerY = None
 
-# initialize the blink counter, yawn counter, a boolean used to
+# initialize the blink counter, yawn counter, noseDesviationCounter a boolean used to
 # indicate if the alarm is going off, and start time
 blinkCounter = 0
 yawnCounter = 0
+noseDesviationCounter = 0
 alarmOn = False
 startTime = None
+pause = False
 
 # load OpenCV's Haar cascade for face detection (which is faster than
 # dlib's built-in HOG detector, but less accurate), then create the
@@ -225,20 +276,57 @@ predictor = dlib.shape_predictor(conf["shape_predictor_path"])
 (rStart, rEnd) = face_utils.FACIAL_LANDMARKS_IDXS["right_eye"]
 (mStart, mEnd) = face_utils.FACIAL_LANDMARKS_IDXS["inner_mouth"]
 (nStart, nEnd) = face_utils.FACIAL_LANDMARKS_IDXS["nose"]
+(jStart, jEnd) = face_utils.FACIAL_LANDMARKS_IDXS["jaw"]
+
 
 # start the video stream thread
 print("[INFO] starting video stream thread...")
-vs = VideoStream(src=0).start()
-#vs = VideoStream(usePiCamera=True).start()
-time.sleep(2.0)
+
+#    vs = VideoStream(src=0).start()
+vs = VideoStream(usePiCamera=True).start()
+
+# Damos un tiempo para que se inicialice la cámara iluminando
+# el traffic hat o si no está activo con un sleep
+if conf["alarm"]:
+    th.buzzer.blink(0.2, 0, 1, background=True)
+    th.lights.green.blink(0.5, 0, 1, background=False)
+    th.buzzer.blink(0.2, 0, 1, background=True)
+    th.lights.yellow.blink(0.5, 0, 1, background=False)
+    th.buzzer.blink(0.2, 0, 1, background=True)
+    th.lights.red.blink(0.5, 0, 1, background=False)
+else:
+    time.sleep(2.0)
+    
 
 # loop over frames from the video stream
 while True:
+    
+    if conf["alarm"]:
+        # Controlamos el botón
+        if (th.button.is_pressed):
+            print ("Botón pulsado")
+            if (pause):
+                #Desactivamos la pausa
+                pause = False
+                th.buzzer.blink(0.5, 0.2, 2, background=True)
+                th.lights.green.blink(0.5, 0.2, 2, background=True)
+                time.sleep(1.0)
+            else:
+                #Activamos la pausa
+                pause = True
+                th.buzzer.blink(0.5, 0.2, 1, background=True)
+                th.lights.red.blink(0.5, 0.2, 2, background=True)
+                time.sleep(1.0)
+                
+    if (pause):
+        continue #No hacemos nada más en el blucle
+
     # grab the frame from the threaded video file stream, resize,
     # flip horizontally, and convert to grayscale
     frame = vs.read()
     frame = imutils.resize(frame, width=450)
-    frame = cv2.flip(frame, 1)
+    # Como la cámara está invertida roto imagen sobre eje x
+    frame = cv2.flip(frame, 0)
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     # set the frame center coordinates
@@ -283,121 +371,12 @@ while True:
         # extract the left and right eye coordinates
         leftEye = shape[lStart:lEnd]
         rightEye = shape[rStart:rEnd]
-#        leftEAR = eye_aspect_ratio(leftEye)
-#        rightEAR = eye_aspect_ratio(rightEye)
 
-#        print ('leftEye=' + str(leftEye))
-#        print ('rightEye=' + str(rightEye))
 
-#        # dibujamos la nariz
-#        nose = shape[nStart:nEnd]
-#        noseHull = cv2.convexHull(nose)
-#        cv2.drawContours(frame, [noseHull], -1, (0, 0, 255), 1)
-#
-#        nose_desviation(leftEye, rightEye, nose)
-
-#        # average the eye aspect ratio together for both eyes
-#        ear = (leftEAR + rightEAR) / 2.0
-#
-#        # compute the convex hull for the left and right eye, then
-#        # visualize each of the eyes
-#        leftEyeHull = cv2.convexHull(leftEye)
-#        rightEyeHull = cv2.convexHull(rightEye)
-#        cv2.drawContours(frame, [leftEyeHull], -1, (0, 255, 0), 1)
-#        cv2.drawContours(frame, [rightEyeHull], -1, (0, 255, 0), 1)
-
-#        # check to see if the eye aspect ratio is below the blink
-#        # threshold
-#        if ear < conf["EYE_AR_THRESH"]:
-#            # increment the blink frame counter
-#            blinkCounter += 1
-#
-#            # if the eyes were closed for a sufficient number of
-#            # frames, then sound the alarm
-#            if blinkCounter >= conf["EYE_AR_CONSEC_FRAMES"]:
-#                # if the alarm is not on, turn it on
-#                if not alarmOn:
-#                    alarmOn = True
-#
-#                    # check to see if the TrafficHat buzzer should
-#                    # be sounded and red light set to blink
-#                    if conf["alarm"]:
-#                        th.buzzer.blink(0.1, 0.1, 30,
-#                            background=True)
-#                        th.lights.red.blink(0.1, 0.1, 30,
-#                            background=True)
-#
-#                # draw an alarm on the frame
-#                cv2.putText(frame, "ALERTA! - ojos cerrados", (10, 60),
-#                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-#
-#        # otherwise, the eye aspect ratio is not below the blink
-#        # threshold, so reset the counter and alarm
-#        else:
-#            blinkCounter = 0
-#            alarmOn = False
-
-        check_closed_eyes()
-        check_yawn()
-        check_head_turn()
-
-#        # extract the inner mouth coordinates, then use the
-#        # coordinates to compute the mouth aspect ratio for the mouth
-#        mouth = shape[mStart:mEnd]
-#        mar = mouth_aspect_ratio(mouth)
-#
-#        # compute the convex hull for the mouth then
-#        # visualize the mouth
-#        mouthHull = cv2.convexHull(mouth)
-#        cv2.drawContours(frame, [mouthHull], -1, (0, 0, 255), 1)
-#        
-#        # check to see if the mouth aspect ratio is above the yawn
-#        # threshold
-#        if mar > conf["MOUTH_AR_THRESH"]:
-#            # increment the yawn frame counter and set the start time
-#            yawnCounter += 1
-#            startTime = datetime.now() if startTime == None else \
-#                startTime
-#
-#            # check to see if yawn frame counter is greater than yawn
-#            # frame threshold and if the difference between current
-#            # time and start time is less than or equal to yawn
-#            # threshold time (in which case the person is drowsy)           
-#            if yawnCounter >= conf["YAWN_THRESH_COUNT"] and \
-#                (datetime.now() - startTime).seconds <= \
-#                conf["YAWN_THRESH_TIME"]:
-#                # if the alarm is not on, turn it on
-#                if not alarmOn:
-#                    alarmOn = True
-#
-#                    # check to see if the TrafficHat buzzer should
-#                    # be sounded and red light set to blink
-#                    if conf["alarm"]:
-#                        th.buzzer.blink(0.1, 0.1, 10,
-#                            background=True)
-#                        th.lights.red.blink(0.1, 0.1, 30,
-#                            background=True)
-#
-#                # draw an alarm on the frame
-#                cv2.putText(frame, "ALERTA! - bostezo",
-#                    (10, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-#                    (0, 0, 255), 2)
-#
-#        # check to see if the start time is set
-#        elif startTime != None:
-#            # check if the difference between current time and start
-#            # time is greater than yawn threshold time
-#            if (datetime.now() - startTime).seconds > \
-#                conf["YAWN_THRESH_TIME"]:
-#                # reset yawn counter, alarm flag and start time
-#                yawnCounter = 0
-#                alarmOn = False
-#                startTime = None
-
-        # draw the computed aspect ratios on the frame
-        cv2.putText(frame, "EAR: {:.3f} MAR: {:.3f}".format(
-            ear, mar), (175, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-            (0, 0, 255), 2)
+        check_closed_eyes(shape, lStart, lEnd, rStart, rEnd, cv2, frame)
+        check_yawn(shape, mStart, mEnd, cv2, frame)
+        check_head_turn(shape, mStart, mEnd, lStart, lEnd, rStart, rEnd, cv2, frame)
+        draw_jaw(shape, jStart, jEnd, cv2, frame)
 
     # if the 'display flag is set, then display the current frame
     # to the screen and record if a user presses a key
